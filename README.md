@@ -1,83 +1,60 @@
-# Real time Image Animation
-The Project is real time application in opencv using first order model
+# Animação de Imagem em Tempo Real  
 
-# Steps to setup
+Este projeto é uma aplicação em tempo real utilizando OpenCV e o **First Order Model** para animação de imagens.  
 
-## Step 1: Create virtual environment
+---
 
-**Python version** : python v3.7.3 or higher
+## 🛠️ Passos para Configuração  
 
-**create virual environment** : ```pip install virtualenv```
+### 📌 Passo 1: Instalar os módulos necessários  
 
-**activate virtual environment** : ```virtualenv env```
+- **Instalar dependências**:  
+  ```bash
+  pip install -r requirements.txt
+  ```  
+- **Instalar PyTorch e Torchvision**:  
+  ```bash
+  pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+  ```  
 
-## Step 2: Activate virtual environment
+---
 
-**For windows** : ```env/Script/activate```
+### 📌 Passo 2: Baixar arquivos necessários  
 
-**For Linux** : ```source env/bin/activate```
+Baixe o arquivo **cascade**, os pesos da rede neural e o modelo treinado.  
+Os arquivos devem ser salvos em uma pasta chamada **extract**.  
 
-## Step 3 : Install required modules
+📩 **Para obter os arquivos, entre em contato com a desenvolvedora pelo e-mail:**  
+**soaresgabriele365@gmail.com**  
 
-**Install modules** : ``` pip install -r requirements.txt ```
+---
 
-**Install pytorch and torchvision** : ```pip install torch===1.0.0 torchvision===0.2.1 -f https://download.pytorch.org/whl/cu100/torch_stable.html ```
+### 📌 Passo 3: Executar o projeto  
 
-## Step 4 : Download cascade file ,weights and model and save in folder named extract
+#### 📷 Rodar a aplicação com a câmera ao vivo:  
+```bash
+python image_animation.py -i caminho_para_imagem -c caminho_para_checkpoint
+```  
+**Exemplo**:  
+```bash
+python image_animation.py -i ./Inputs/Monalisa.png -c ./checkpoints/vox-cpk.pth.tar
+```  
 
-```gdown --id 1wCzJP1XJNB04vEORZvPjNz6drkXm5AUK```
-The file is also availible via direct link on Google's Drive:
-https://drive.google.com/uc?id=1wCzJP1XJNB04vEORZvPjNz6drkXm5AUK
+#### 🎥 Rodar a aplicação com um arquivo de vídeo:  
+```bash
+python image_animation.py -i caminho_para_imagem -c caminho_para_checkpoint -v caminho_para_video
+```  
+**Exemplo**:  
+```bash
+python image_animation.py -i ./Inputs/Monalisa.png -c ./checkpoints/vox-cpk.pth.tar -v ./video_input/test1.mp4
+```  
 
-**On Linux machine** : ```unzip checkpoints.zip```
+---
 
-If on windows platfrom unzip checkpoints.zip using unzipping software like 7zip.
+![Demonstração](animate.gif)  
 
-**Delete zip file** : ```rm checkpoints.zip```
+### 🔗 Projeto original  
+*Criado por* [anandpawara](https://github.com/anandpawara/Real_Time_Image_Animation)  
 
-## Step 5 : Run the project
-
-**Run application from live camera** : ```python image_animation.py -i path_to_input_file -c path_to_checkpoint```
-
-**Example** : ```python .\image_animation.py -i .\Inputs\Monalisa.png -c .\checkpoints\vox-cpk.pth.tar```
-
-**Run application from video file** : ```python image_animation.py -i path_to_input_file -c path_to_checkpoint -v path_to_video_file```
-
-**Example** : ```python .\image_animation.py -i .\Inputs\Monalisa.png -c .\checkpoints\vox-cpk.pth.tar -v .\video_input\test1.mp4 ```
-
-![test demo](animate.gif)
-
-### TODO:
-Tkinter version
-
-Need work on face alignments
-
-Future plans adding deepfake voice and merging with video
-
-Credits
-=======
-```
-@InProceedings{Siarohin_2019_NeurIPS,
-  author={Siarohin, Aliaksandr and Lathuilière, Stéphane and Tulyakov, Sergey and Ricci, Elisa and Sebe, Nicu},
-  title={First Order Motion Model for Image Animation},
-  booktitle = {Conference on Neural Information Processing Systems (NeurIPS)},
-  month = {December},
-  year = {2019},
-  url = {https://github.com/AliaksandrSiarohin/first-order-model}
-}
-```
-- Original Project
-    * [AliaksandrSiarohin](https://github.com/AliaksandrSiarohin/first-order-model)
-
-    If you like this project give your support to original author of this project by giving github star to author's project
-
-- video explanation to the project <br/>
-    * [Video explanation by original author](https://www.youtube.com/watch?v=u-0cQ-grXBQ)
-    * [Two min papers](https://www.youtube.com/watch?v=mUfJOQKdtAk)    
-
-- try project on google colab
-    * [youtube link](https://www.youtube.com/watch?v=RsOJJd1q6Bg&feature=youtu.be)
-    * [link to colab version](https://colab.research.google.com/github/AliaksandrSiarohin/first-order-model/blob/master/demo.ipynb)
-
-    For any valueable feedback feel free to contact me on [linkedin](https://www.linkedin.com/in/anand-pawara-8045/)
+---
 
