@@ -29,14 +29,14 @@ def load_checkpoints(config_path, checkpoint_path, cpu=False):
     generator = OcclusionAwareGenerator(**config['model_params']['generator_params'],
                                         **config['model_params']['common_params'])
     if not cpu:
-        generator.cuda()
+        generator.cpu()
 
     kp_detector = KPDetector(**config['model_params']['kp_detector_params'],
                              **config['model_params']['common_params'])
     if not cpu:
-        kp_detector.cuda()
+        kp_detector.cpu()
     
-    if cpu:
+    if not cpu:
         checkpoint = torch.load(checkpoint_path, map_location=torch.device('cpu'))
     else:
         checkpoint = torch.load(checkpoint_path)
