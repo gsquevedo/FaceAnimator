@@ -1,4 +1,4 @@
-import imageio
+import imageio.v2 as imageio
 import torch
 from tqdm import tqdm
 from animate import normalize_kp
@@ -36,19 +36,6 @@ source_image = imageio.imread(source_path)
 source_image = resize(source_image, (256, 256))[..., :3]
 generator, kp_detector = load_checkpoints(config_path=config_path, checkpoint_path=checkpoint_path)
 
-# Carregar o detector de rosto
-print(cv2.data.haarcascades)
-
-# Verificar se está no modo de executável ou ambiente local
-if is_executable():
-    # No executável, o arquivo Haar Cascade deve ser localizado de forma diferente
-    haar_cascade_path = os.path.join(sys._MEIPASS, 'cv2', 'data', 'haarcascade_frontalface_default.xml')
-else:
-    # No ambiente local, usamos o caminho padrão
-    haar_cascade_path = cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
-
-face_cascade = cv2.CascadeClassifier(haar_cascade_path)
-
 # Criação do diretório de saída
 if not os.path.exists('output'):
     os.mkdir('output')
@@ -81,40 +68,32 @@ with torch.no_grad():
         ret, frame = cap.read()
         frame = cv2.flip(frame, 1)
         if ret:
-            # Detectar rosto na imagem
-            gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            faces = face_cascade.detectMultiScale(gray_frame, scaleFactor=1.1, minNeighbors=5, minSize=(50, 50))
+            # Obtenção do tamanho do quadro da webcam
+            h, w, _ = frame.shape
 
-            if len(faces) > 0:
-                x, y, w, h = faces[0]  # Seleciona o primeiro rosto detectado
-
-                # Expandir os limites do recorte para incluir mais área ao redor do rosto
-                margin = 0.3  # Porcentagem de margem adicional
-                x_margin = int(w * margin)
-                y_margin = int(h * margin)
-
-                # Garantir que os limites não excedam os da imagem original
-                x1 = max(0, x - x_margin)
-                y1 = max(0, y - y_margin)
-                x2 = min(frame.shape[1], x + w + x_margin)
-                y2 = min(frame.shape[0], y + h + y_margin)
-
-                face_frame = frame[y1:y2, x1:x2]  # Recorta a região expandida
-                face_frame = resize(face_frame, (256, 256))[..., :3]
+            if not video_path:  # Não aplica o corte quando for vídeo de entrada
+                # Corte central do quadro para 256x256
+                center_h, center_w = h // 2, w // 2
+                cropped_frame = frame[center_h - 128:center_h + 128, center_w - 128:center_w + 128]
+                # Redimensionar o quadro cortado para o tamanho adequado
+                frame_resized = resize(cropped_frame, (256, 256))[..., :3]
             else:
-                # Usa o quadro completo se nenhum rosto for detectado
-                face_frame = resize(frame, (256, 256))[..., :3]
+                # Para vídeos, usa-se o frame original sem corte
+                frame_resized = resize(frame, (256, 256), mode='reflect', anti_aliasing=True)[..., :3]
 
             if count == 0:
-                source_image1 = face_frame
+                source_image1 = frame_resized
                 source1 = torch.tensor(source_image1[np.newaxis].astype(np.float32)).permute(0, 3, 1, 2)
                 kp_driving_initial = kp_detector(source1)
 
-            frame_test = torch.tensor(face_frame[np.newaxis].astype(np.float32)).permute(0, 3, 1, 2)
+            # Processar o quadro do vídeo
+            frame_test = torch.tensor(frame_resized[np.newaxis].astype(np.float32)).permute(0, 3, 1, 2)
             driving_frame = frame_test
             if not cpu:
                 driving_frame = driving_frame.cuda()
             kp_driving = kp_detector(driving_frame)
+
+            # Normalização dos pontos de referência para aplicar movimentos faciais (como o sorriso)
             kp_norm = normalize_kp(kp_source=kp_source,
                                    kp_driving=kp_driving,
                                    kp_driving_initial=kp_driving_initial,
@@ -125,8 +104,9 @@ with torch.no_grad():
             predictions.append(np.transpose(out['prediction'].data.cpu().numpy(), [0, 2, 3, 1])[0])
             im = np.transpose(out['prediction'].data.cpu().numpy(), [0, 2, 3, 1])[0]
             im = cv2.cvtColor(im, cv2.COLOR_RGB2BGR)
-            joinedFrame = np.concatenate((cv2_source, im, face_frame), axis=1)
+            joinedFrame = np.concatenate((cv2_source, im, frame_resized), axis=1)
 
+            # Exibir o quadro com a animação aplicada
             cv2.imshow('Test', joinedFrame)
             out1.write(img_as_ubyte(joinedFrame))
             count += 1
@@ -135,6 +115,7 @@ with torch.no_grad():
         else:
             break
 
+    # Libere os recursos de captura e vídeo
     cap.release()
     out1.release()
     cv2.destroyAllWindows()
