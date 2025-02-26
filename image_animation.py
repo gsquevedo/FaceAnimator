@@ -68,22 +68,18 @@ with torch.no_grad():
         ret, frame = cap.read()
         frame = cv2.flip(frame, 1)
         if ret:
-            # Obtenção do tamanho do quadro da webcam
             h, w, _ = frame.shape
 
-            if not video_path:  # Não aplica o corte quando for vídeo de entrada
-                # Ajuste de câmera para quando não for vídeo de entrada
-                scale_factor = 1.5  # Ajuste esse valor para mais ou menos afastamento
+            if not video_path: 
+                scale_factor = 1.5  
                 new_size = int(256 * scale_factor)
 
                 center_h, center_w = h // 2, w // 2
                 cropped_frame = frame[max(0, center_h - new_size // 2):min(h, center_h + new_size // 2),
                                       max(0, center_w - new_size // 2):min(w, center_w + new_size // 2)]
 
-                # Redimensionar para 256x256 novamente
                 frame_resized = resize(cropped_frame, (256, 256), mode='reflect', anti_aliasing=True)[..., :3]
             else:
-                # Para vídeos, usa-se o frame original sem corte
                 frame_resized = resize(frame, (256, 256), mode='reflect', anti_aliasing=True)[..., :3]
 
             if count == 0:
@@ -91,14 +87,12 @@ with torch.no_grad():
                 source1 = torch.tensor(source_image1[np.newaxis].astype(np.float32)).permute(0, 3, 1, 2)
                 kp_driving_initial = kp_detector(source1)
 
-            # Processar o quadro do vídeo
             frame_test = torch.tensor(frame_resized[np.newaxis].astype(np.float32)).permute(0, 3, 1, 2)
             driving_frame = frame_test
             if not cpu:
                 driving_frame = driving_frame.cuda()
             kp_driving = kp_detector(driving_frame)
 
-            # Normalização dos pontos de referência para aplicar movimentos faciais (como o sorriso)
             kp_norm = normalize_kp(kp_source=kp_source,
                                    kp_driving=kp_driving,
                                    kp_driving_initial=kp_driving_initial,
@@ -111,8 +105,7 @@ with torch.no_grad():
             im = cv2.cvtColor(im, cv2.COLOR_RGB2BGR)
             joinedFrame = np.concatenate((cv2_source, im, frame_resized), axis=1)
 
-            # Exibir o quadro com a animação aplicada
-            cv2.imshow('Test', joinedFrame)
+            cv2.imshow('Animação em Tempo Real', joinedFrame)
             out1.write(img_as_ubyte(joinedFrame))
             count += 1
             if cv2.waitKey(20) & 0xFF == ord('q'):
@@ -120,7 +113,6 @@ with torch.no_grad():
         else:
             break
 
-    # Libere os recursos de captura e vídeo
     cap.release()
     out1.release()
     cv2.destroyAllWindows()
