@@ -1,11 +1,11 @@
-import imageio.v2 as imageio 
+import imageio.v2 as imageio
 import torch
 from tqdm import tqdm
 from animate import normalize_kp
 from demo import load_checkpoints
 import numpy as np
 from skimage.transform import resize
-from skimage import img_as_ubyte, exposure
+from skimage import img_as_ubyte
 import cv2
 import os
 import argparse
@@ -24,34 +24,38 @@ args = vars(ap.parse_args())
 config_path = 'config/vox-256.yaml' if not is_executable() else './vox-256.yaml'
 
 # Carregar imagem de origem e checkpoints
-print("[INFO] Carregando imagem de origem e checkpoint...")
+print("[INFO] Loading source image and checkpoint...")
 source_path = args['input_image']
 checkpoint_path = args['checkpoint']
-video_path = args.get('input_video', None)
+if args['input_video']:
+    video_path = args['input_video']
+else:
+    video_path = None
 
 source_image = imageio.imread(source_path)
 source_image = resize(source_image, (256, 256))[..., :3]
-
 generator, kp_detector = load_checkpoints(config_path=config_path, checkpoint_path=checkpoint_path)
 
-# Criar diretório de saída
-os.makedirs('output', exist_ok=True)
+# Criação do diretório de saída
+if not os.path.exists('output'):
+    os.mkdir('output')
 
 relative = True
 adapt_movement_scale = True
 cpu = True
 
 # Configuração da câmera ou vídeo
-cap = cv2.VideoCapture(video_path if video_path else 0)
-print(f"[INFO] Usando {'vídeo' if video_path else 'webcam'} para animação...")
+if video_path:
+    cap = cv2.VideoCapture(video_path)
+    print("[INFO] Loading video from the given path")
+else:
+    cap = cv2.VideoCapture(0)
+    print("[INFO] Initializing front camera...")
 
 fourcc = cv2.VideoWriter_fourcc(*'MJPG')
 out1 = cv2.VideoWriter('output/test.avi', fourcc, 12, (256 * 3, 256), True)
 
-# Converte a imagem original para OpenCV
-cv2_source = (source_image * 255).astype(np.uint8)
-cv2_source = cv2.cvtColor(cv2_source, cv2.COLOR_RGB2BGR)
-
+cv2_source = cv2.cvtColor(source_image.astype('float32'), cv2.COLOR_BGR2RGB)
 with torch.no_grad():
     predictions = []
     source = torch.tensor(source_image[np.newaxis].astype(np.float32)).permute(0, 3, 1, 2)
@@ -62,74 +66,61 @@ with torch.no_grad():
 
     while True:
         ret, frame = cap.read()
-        if not ret:
-            break
-        
         frame = cv2.flip(frame, 1)
+        if ret:
+            # Obtenção do tamanho do quadro da webcam
+            h, w, _ = frame.shape
 
-        h, w, _ = frame.shape
-        if not video_path:
-            # Ajuste o fator de escala para "afastar" a imagem
-            scale_factor = 1.5  # Ajuste esse valor para mais ou menos afastamento
-            new_size = int(256 * scale_factor)
+            if not video_path:  # Não aplica o corte quando for vídeo de entrada
+                # Ajuste de câmera para quando não for vídeo de entrada
+                scale_factor = 1.5  # Ajuste esse valor para mais ou menos afastamento
+                new_size = int(256 * scale_factor)
 
-            center_h, center_w = h // 2, w // 2
-            cropped_frame = frame[max(0, center_h - new_size // 2):min(h, center_h + new_size // 2),
-                                  max(0, center_w - new_size // 2):min(w, center_w + new_size // 2)]
+                center_h, center_w = h // 2, w // 2
+                cropped_frame = frame[max(0, center_h - new_size // 2):min(h, center_h + new_size // 2),
+                                      max(0, center_w - new_size // 2):min(w, center_w + new_size // 2)]
 
-            # Redimensionar para 256x256 novamente
-            frame_resized = resize(cropped_frame, (256, 256), mode='reflect', anti_aliasing=True)[..., :3]
+                # Redimensionar para 256x256 novamente
+                frame_resized = resize(cropped_frame, (256, 256), mode='reflect', anti_aliasing=True)[..., :3]
+            else:
+                # Para vídeos, usa-se o frame original sem corte
+                frame_resized = resize(frame, (256, 256), mode='reflect', anti_aliasing=True)[..., :3]
+
+            if count == 0:
+                source_image1 = frame_resized
+                source1 = torch.tensor(source_image1[np.newaxis].astype(np.float32)).permute(0, 3, 1, 2)
+                kp_driving_initial = kp_detector(source1)
+
+            # Processar o quadro do vídeo
+            frame_test = torch.tensor(frame_resized[np.newaxis].astype(np.float32)).permute(0, 3, 1, 2)
+            driving_frame = frame_test
+            if not cpu:
+                driving_frame = driving_frame.cuda()
+            kp_driving = kp_detector(driving_frame)
+
+            # Normalização dos pontos de referência para aplicar movimentos faciais (como o sorriso)
+            kp_norm = normalize_kp(kp_source=kp_source,
+                                   kp_driving=kp_driving,
+                                   kp_driving_initial=kp_driving_initial,
+                                   use_relative_movement=relative,
+                                   use_relative_jacobian=relative,
+                                   adapt_movement_scale=adapt_movement_scale)
+            out = generator(source, kp_source=kp_source, kp_driving=kp_norm)
+            predictions.append(np.transpose(out['prediction'].data.cpu().numpy(), [0, 2, 3, 1])[0])
+            im = np.transpose(out['prediction'].data.cpu().numpy(), [0, 2, 3, 1])[0]
+            im = cv2.cvtColor(im, cv2.COLOR_RGB2BGR)
+            joinedFrame = np.concatenate((cv2_source, im, frame_resized), axis=1)
+
+            # Exibir o quadro com a animação aplicada
+            cv2.imshow('Test', joinedFrame)
+            out1.write(img_as_ubyte(joinedFrame))
+            count += 1
+            if cv2.waitKey(20) & 0xFF == ord('q'):
+                break
         else:
-            cropped_frame = frame
-
-        frame_resized = (frame_resized * 255).astype(np.uint8)
-
-        if count == 0:
-            source_image1 = frame_resized.astype(np.float32) / 255.0
-            source1 = torch.tensor(source_image1[np.newaxis].astype(np.float32)).permute(0, 3, 1, 2)
-            kp_driving_initial = kp_detector(source1)
-
-        # Processar o quadro do vídeo
-        frame_test = frame_resized.astype(np.float32) / 255.0
-        driving_frame = torch.tensor(frame_test[np.newaxis]).permute(0, 3, 1, 2)
-        if not cpu:
-            driving_frame = driving_frame.cuda()
-        kp_driving = kp_detector(driving_frame)
-
-        # Normalizar os pontos-chave faciais
-        kp_norm = normalize_kp(
-            kp_source=kp_source,
-            kp_driving=kp_driving,
-            kp_driving_initial=kp_driving_initial,
-            use_relative_movement=relative,
-            use_relative_jacobian=relative,
-            adapt_movement_scale=adapt_movement_scale
-        )
-
-        out = generator(source, kp_source=kp_source, kp_driving=kp_norm)
-        im = np.transpose(out['prediction'].data.cpu().numpy(), [0, 2, 3, 1])[0]
-
-        # Evitar imagens brancas: normalizar corretamente
-        im = np.clip(im, 0, 1)
-        im = (im * 255).astype(np.uint8)
-
-        # Converter para formato OpenCV corretamente
-        im = cv2.cvtColor(im, cv2.COLOR_RGB2BGR)
-
-        # Criar um frame combinado
-        joinedFrame = np.concatenate((cv2_source, im, frame_resized), axis=1)
-
-        # Exibir a animação
-        cv2.imshow('Test', joinedFrame)
-
-        # Salvar corretamente
-        out1.write(joinedFrame)
-
-        count += 1
-        if cv2.waitKey(20) & 0xFF == ord('q'):
             break
 
-    # Liberar recursos
+    # Libere os recursos de captura e vídeo
     cap.release()
     out1.release()
     cv2.destroyAllWindows()
